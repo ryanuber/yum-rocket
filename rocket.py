@@ -6,10 +6,9 @@ import time
 import yum.i18n
 _ = yum.i18n._
 P_ = yum.i18n.P_
-import urlgrabber
-from urlgrabber.grabber import URLGrabber, URLGrabError
-from urlgrabber.progress import format_number
 import logging
+import urllib
+from urlparse import urlparse
 import Queue
 import threading
 
@@ -22,10 +21,13 @@ verbose_logger = logging.getLogger("yum.verbose.Repos")
 class _yb(YumBase):
     @staticmethod
     def getPackage(po, thread_id):
+        repo_url = po.repo._urls[0]
+        repo_name = urlparse(repo_url).netloc
         url = po._remote_url()
-        verbose_logger.info('[%s] downloading: %s' % (thread_id, po))
+        verbose_logger.info('[%s] [%s] downloading: %s' % (thread_id, repo_name, po))
         # do download
-        verbose_logger.info('[%s] complete: %s' % (thread_id, po))
+        urllib.urlretrieve(url, po.localPkg())
+        verbose_logger.info('[%s] [%s] complete: %s' % (thread_id, repo_name, po))
 
     def downloadPkgs(self, pkglist, callback=None, callback_total=None):
         class PkgDownloadThread(threading.Thread):
@@ -103,30 +105,12 @@ class _yb(YumBase):
                 return errors
 
         remote_pkgs.sort(mediasort)
-        #  This is kind of a hack and does nothing in non-Fedora versions,
-        # we'll fix it one way or anther soon.
-        if (hasattr(urlgrabber.progress, 'text_meter_total_size') and
-            len(remote_pkgs) > 1):
-            urlgrabber.progress.text_meter_total_size(remote_size)
         beg_download = time.time()
         i = 0
         local_size = 0
         done_repos = set()
 
-        # Let's thread this bitch
-        q = Queue.Queue()
-        for i in range(1, 3):
-            downloader = PkgDownloadThread(q)
-            downloader.start()
-
-        for po in remote_pkgs:
-            q.put(po)
-
-        q.join()
-
-        return []
-
-        '''
+        download_po = []
         for po in remote_pkgs:
             #  Recheck if the file is there, works around a couple of weird
             # edge cases.
@@ -136,9 +120,6 @@ class _yb(YumBase):
                 if self.verifyPkg(local, po, False):
                     self.verbose_logger.debug(_("using local copy of %s") %(po,))
                     remote_size -= po.size
-                    if hasattr(urlgrabber.progress, 'text_meter_total_size'):
-                        urlgrabber.progress.text_meter_total_size(remote_size,
-                                                                  local_size)
                     continue
                 if os.path.getsize(local) >= po.size:
                     os.unlink(local)
@@ -153,50 +134,25 @@ class _yb(YumBase):
                           format_number(dirstat.f_bavail * dirstat.f_bsize),
                           format_number(po.size)))
                 continue
-            try:
-                if i == 1 and not local_size and remote_size == po.size:
-                    text = os.path.basename(po.relativepath)
-                else:
-                    text = '(%s/%s): %s' % (i, len(remote_pkgs),
-                                            os.path.basename(po.relativepath))
-                mylocal = po.repo.getPackage(po,
-                                   checkfunc=checkfunc,
-                                   text=text,
-                                   cache=po.repo.http_caching != 'none',
-                                   )
-                local_size += po.size
-                if hasattr(urlgrabber.progress, 'text_meter_total_size'):
-                    urlgrabber.progress.text_meter_total_size(remote_size,
-                                                              local_size)
-                # Don't check this atm. as it kills C-c.
-                if False and po.repoid not in done_repos:
-                    #  Check a single package per. repo. ... to give a hint to
-                    # the user on big downloads.
-                    result, errmsg = self.sigCheckPkg(po)
-                    if result != 0:
-                        self.verbose_logger.warn("%s", errmsg)
-                done_repos.add(po.repoid)
+            download_po.append(po)
 
-            except Errors.RepoError, e:
-                adderror(po, exception2msg(e))
-            else:
-                po.localpath = mylocal
-                if po in errors:
-                    del errors[po]
+        # Let's thread this bitch
+        q = Queue.Queue()
+        for i in range(1, 3):
+            downloader = PkgDownloadThread(q)
+            downloader.start()
 
-        if hasattr(urlgrabber.progress, 'text_meter_total_size'):
-            urlgrabber.progress.text_meter_total_size(0)
+        for po in download_po:
+            q.put(po)
+
+        q.join()
+
         if callback_total is not None and not errors:
             callback_total(remote_pkgs, remote_size, beg_download)
 
         self.plugins.run('postdownload', pkglist=pkglist, errors=errors)
 
-        # Close curl object after we've downloaded everything.
-        if hasattr(urlgrabber.grabber, 'reset_curl_obj'):
-            urlgrabber.grabber.reset_curl_obj()
-
         return errors
-        '''
 
 def init_hook(conduit):
     if hasattr(conduit, 'registerPackageName'):
