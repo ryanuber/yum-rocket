@@ -19,17 +19,17 @@ logger = logging.getLogger("yum.Repos")
 verbose_logger = logging.getLogger("yum.verbose.Repos")
 
 class _yb(YumBase):
-    @staticmethod
-    def getPackage(po, thread_id):
-        repo_url = po.repo._urls[0]
-        repo_name = urlparse(repo_url).netloc
-        url = po._remote_url()
-        verbose_logger.info('[%s] [%s] downloading: %s' % (thread_id, repo_name, po))
-        # do download
-        urllib.urlretrieve(url, po.localPkg())
-        verbose_logger.info('[%s] [%s] complete: %s' % (thread_id, repo_name, po))
 
     def downloadPkgs(self, pkglist, callback=None, callback_total=None):
+
+        def getPackage(po, thread_id):
+            repo_url = po.repo._urls[0]
+            repo_name = urlparse(repo_url).netloc
+            url = po._remote_url()
+            verbose_logger.info('[%s] [%s] downloading: %s' % (thread_id, repo_name, po))
+            urllib.urlretrieve(url, po.localPkg())
+            verbose_logger.info('[%s] [%s] complete: %s' % (thread_id, repo_name, po))
+
         class PkgDownloadThread(threading.Thread):
             def __init__(self, q):
                 threading.Thread.__init__(self)
@@ -39,7 +39,7 @@ class _yb(YumBase):
                     po = self.q.get()
                     #po.repo.getPackage(po, text='[%s] %s' % (
                     #    self.name, os.path.basename(po.relativepath)))
-                    _yb.getPackage(po, self.name)
+                    getPackage(po, self.name)
                     self.q.task_done()
 
         def mediasort(apo, bpo):
