@@ -24,7 +24,7 @@ class _yb(YumBase):
             def run(self):
                 while True:
                     po = self.q.get()
-                    po.repo.getPackage(po, text='[thread %s] %s' % (
+                    po.repo.getPackage(po, text='[%s] %s' % (
                         self.name, os.path.basename(po.relativepath)))
                     self.q.task_done()
 
