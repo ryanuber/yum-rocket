@@ -9,13 +9,24 @@ P_ = yum.i18n.P_
 import urlgrabber
 from urlgrabber.grabber import URLGrabber, URLGrabError
 from urlgrabber.progress import format_number
+import logging
 import Queue
 import threading
 
 requires_api_version = '2.5'
 plugin_type = (TYPE_CORE,)
 
+logger = logging.getLogger("yum.Repos")
+verbose_logger = logging.getLogger("yum.verbose.Repos")
+
 class _yb(YumBase):
+    @staticmethod
+    def getPackage(po, thread_id):
+        url = po._remote_url()
+        verbose_logger.info('[%s] downloading: %s' % (thread_id, po))
+        # do download
+        verbose_logger.info('[%s] complete: %s' % (thread_id, po))
+
     def downloadPkgs(self, pkglist, callback=None, callback_total=None):
         class PkgDownloadThread(threading.Thread):
             def __init__(self, q):
@@ -24,8 +35,9 @@ class _yb(YumBase):
             def run(self):
                 while True:
                     po = self.q.get()
-                    po.repo.getPackage(po, text='[%s] %s' % (
-                        self.name, os.path.basename(po.relativepath)))
+                    #po.repo.getPackage(po, text='[%s] %s' % (
+                    #    self.name, os.path.basename(po.relativepath)))
+                    _yb.getPackage(po, self.name)
                     self.q.task_done()
 
         def mediasort(apo, bpo):
@@ -111,6 +123,8 @@ class _yb(YumBase):
             q.put(po)
 
         q.join()
+
+        return []
 
         '''
         for po in remote_pkgs:
