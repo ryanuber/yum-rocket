@@ -9,13 +9,25 @@ P_ = yum.i18n.P_
 import urlgrabber
 from urlgrabber.grabber import URLGrabber, URLGrabError
 from urlgrabber.progress import format_number
+import Queue
+import threading
 
 requires_api_version = '2.5'
 plugin_type = (TYPE_CORE,)
 
 class _yb(YumBase):
     def downloadPkgs(self, pkglist, callback=None, callback_total=None):
-        print "LKSJDFLKSJF"
+        class PkgDownloadThread(threading.Thread):
+            def __init__(self, q):
+                threading.Thread.__init__(self)
+                self.q = q
+            def run(self):
+                while True:
+                    po = self.q.get()
+                    po.repo.getPackage(po, text='[thread %s] %s' % (
+                        self.name, os.path.basename(po.relativepath)))
+                    self.q.task_done()
+
         def mediasort(apo, bpo):
             # FIXME: we should probably also use the mediaid; else we
             # could conceivably ping-pong between different disc1's
@@ -57,6 +69,7 @@ class _yb(YumBase):
         for po in pkglist:
             if hasattr(po, 'pkgtype') and po.pkgtype == 'local':
                 continue
+
             local = po.localPkg()
             if os.path.exists(local):
                 if not self.verifyPkg(local, po, False):
@@ -67,8 +80,10 @@ class _yb(YumBase):
                 else:
                     self.verbose_logger.debug(_("using local copy of %s") %(po,))
                     continue
+
             remote_pkgs.append(po)
             remote_size += po.size
+
             # caching is enabled and the package
             # just failed to check out there's no
             # way to save this, report the error and return
@@ -85,6 +100,19 @@ class _yb(YumBase):
         i = 0
         local_size = 0
         done_repos = set()
+
+        # Let's thread this bitch
+        q = Queue.Queue()
+        for i in range(1, 3):
+            downloader = PkgDownloadThread(q)
+            downloader.start()
+
+        for po in remote_pkgs:
+            q.put(po)
+
+        q.join()
+
+        '''
         for po in remote_pkgs:
             #  Recheck if the file is there, works around a couple of weird
             # edge cases.
@@ -154,6 +182,7 @@ class _yb(YumBase):
             urlgrabber.grabber.reset_curl_obj()
 
         return errors
+        '''
 
 def init_hook(conduit):
     if hasattr(conduit, 'registerPackageName'):
