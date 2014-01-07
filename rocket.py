@@ -186,5 +186,5 @@ class _yb(YumBase):
 
 def init_hook(conduit):
     if hasattr(conduit, 'registerPackageName'):
-        conduit.registerPackageName('yum-faster')
+        conduit.registerPackageName('yum-rocket')
     conduit._base.downloadPkgs = _yb().downloadPkgs
