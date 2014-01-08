@@ -96,11 +96,12 @@ class YumRocket(YumBase):
                 self.run_event = run_event
 
             def run(self):
-                while self.run_event.is_set():
+                while self.run_event.is_set() and not self.q.empty():
                     po = self.q.get()
                     getPackage(po, self.name)
                     self.q.task_done()
-                logger.warn('Stopping %s...' % self.name)
+                if not self.run_event.is_set():
+                    logger.warn('Stopping %s...' % self.name)
 
         def wait_on_threads(threads):
             """ Wait for a list of threads to finish working. """
@@ -204,9 +205,9 @@ class YumRocket(YumBase):
             download_po.append(po)
 
         # Let's thread this bitch!
+        if len(download_po) < threadcount:
+            threadcount = len(download_po)
         if (len(download_po) > 0):
-            if len(download_po) < threadcount:
-                threadcount = len(download_po)
             self.verbose_logger.info(_("Spawning %d download threads" %
                                        threadcount))
 
