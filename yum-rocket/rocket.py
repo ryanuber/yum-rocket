@@ -77,11 +77,11 @@ class YumRocket(YumBase):
         self.conduit = conduit
 
     def downloadPkgs(self, pkglist, callback=None, callback_total=None):
-        global logger, verboselogger, threadcount, spanmirrors, yb_orig
+        global logger, verboselogger, threadcount, spanmirrors
         global repo_list
 
-        def getPackage(po, thread_id):
-            """ Handle downloading a package from a repository.
+        def prioritize_po_repos(po):
+            """ Organize a repository list based on mirror speed.
 
             This function will (somewhat) intelligently choose from a number of
             mirrors to download from. It will choose only the fastest set of
@@ -89,35 +89,45 @@ class YumRocket(YumBase):
             from each of them to help distribute the load over multiple fast
             mirror servers.
             """
-            repo_url = po.repo._urls[0]
-
+            repo_url = None
             load = 1
             urlcount = 0
             for url in po.repo._urls:
-                if not po.repo.id in repo_list.keys():
-                    repo_list[po.repo.id] = dict()
-                if not url in repo_list[po.repo.id].keys():
-                    if spanmirrors < urlcount:
-                        break
-                    repo_list[po.repo.id][url] = 0
-                    urlcount += 1
+                if urlcount < spanmirrors:
+                    if not po.repo.id in repo_list.keys():
+                        repo_list[po.repo.id] = dict()
+                    if not url in repo_list[po.repo.id].keys():
+                        repo_list[po.repo.id][url] = 0
+                        urlcount += 1
 
-            for r in repo_list[po.repo.id].keys():
-                if repo_list[po.repo.id][r] < load:
-                    repo_list[po.repo.id][r] += 1
-                    repo_url = r
-                    break
+            while not repo_url:
+                for r in repo_list[po.repo.id].keys():
+                    if repo_list[po.repo.id][r] < load:
+                        repo_list[po.repo.id][r] += 1
+                        repo_url = r
+                        break
                 load += 1
 
             po.repo._urls = repo_list[po.repo.id].keys()
             po.repo._urls.remove(repo_url)
             po.repo._urls = [repo_url] + po.repo._urls
 
+            return repo_url
+
+        def mirror_load(id, url, load):
+            """ Update the load value of a given mirror """
+            if id in repo_list.keys() and url in repo_list[id].keys():
+                repo_list[id][url] += load
+
+        def getPackage(po, thread_id):
+            """ Handle downloading a package from a repository. """
+            repo_url = prioritize_po_repos(po)
             repo_name = urlparse(po._remote_url()).netloc
             url = po._remote_url()
             verbose_logger.info(_('[%s] %s start: %s' % (thread_id, repo_name, po)))
+            mirror_load(po.repo.id, repo_url, 1)
             urllib.urlretrieve(url, po.localPkg())
-            repo_list[po.repo.id][repo_url] -= 1
+            mirror_load(po.repo.id, repo_url, -1)
             verbose_logger.info(_('[%s] %s done: %s' % (thread_id, repo_name, po)))
 
         class PkgDownloadThread(threading.Thread):
