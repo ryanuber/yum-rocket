@@ -11,6 +11,8 @@ import urllib
 from urlparse import urlparse
 import Queue
 import threading
+from multiprocessing import cpu_count
+import random
 
 requires_api_version = '2.5'
 plugin_type = (TYPE_CORE,)
@@ -18,17 +20,23 @@ plugin_type = (TYPE_CORE,)
 logger = logging.getLogger("yum.Repos")
 verbose_logger = logging.getLogger("yum.verbose.Repos")
 
+spanmirrors = 1
+threadcount = cpu_count()
+
 class _yb(YumBase):
 
     def downloadPkgs(self, pkglist, callback=None, callback_total=None):
 
         def getPackage(po, thread_id):
-            repo_url = po.repo._urls[0]
-            repo_name = urlparse(repo_url).netloc
+            if spanmirrors == 1:
+                repo_url = po.repo._urls[random.randint(0,threadcount-1)]
+                po.repo._urls.remove(repo_url)
+                po.repo._urls = [repo_url] + po.repo._urls
+            repo_name = urlparse(po._remote_url()).netloc
             url = po._remote_url()
-            verbose_logger.info('[%s] [%s] downloading: %s' % (thread_id, repo_name, po))
+            verbose_logger.info(_('[%s] %s start: %s' % (thread_id, repo_name, po)))
             urllib.urlretrieve(url, po.localPkg())
-            verbose_logger.info('[%s] [%s] complete: %s' % (thread_id, repo_name, po))
+            verbose_logger.info(_('[%s] %s done: %s' % (thread_id, repo_name, po)))
 
         class PkgDownloadThread(threading.Thread):
             def __init__(self, q):
@@ -37,8 +45,6 @@ class _yb(YumBase):
             def run(self):
                 while True:
                     po = self.q.get()
-                    #po.repo.getPackage(po, text='[%s] %s' % (
-                    #    self.name, os.path.basename(po.relativepath)))
                     getPackage(po, self.name)
                     self.q.task_done()
 
@@ -137,8 +143,9 @@ class _yb(YumBase):
             download_po.append(po)
 
         # Let's thread this bitch
+        self.verbose_logger.info(_("yum-rocket => spawn %d threads" % threadcount))
         q = Queue.Queue()
-        for i in range(1, 3):
+        for i in range(1, threadcount+1):
             downloader = PkgDownloadThread(q)
             downloader.start()
 
@@ -155,6 +162,9 @@ class _yb(YumBase):
         return errors
 
 def init_hook(conduit):
+    global threadcount, spanmirrors
+    threadcount = conduit.confInt('main', 'threadcount', default=cpu_count())
+    spanmirrors = conduit.confInt('main', 'spanmirrors', default=1)
     if hasattr(conduit, 'registerPackageName'):
         conduit.registerPackageName('yum-rocket')
     conduit._base.downloadPkgs = _yb().downloadPkgs
