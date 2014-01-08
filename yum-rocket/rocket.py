@@ -32,6 +32,7 @@ from urlparse import urlparse
 
 from yum.plugins import TYPE_CORE
 from yum import YumBase
+from yum.plugins import PluginYumExit
 import yum.packages
 import yum.i18n
 _ = yum.i18n._
@@ -71,8 +72,12 @@ class YumRocket(YumBase):
     connection limits enforced by any single mirror. This behaviour can be
     disabled by setting spanmirrors to 1.
     """
+    def set_conduit(self, conduit):
+        """ Pass in the conduit so we can still access the original YumBase. """
+        self.conduit = conduit
+
     def downloadPkgs(self, pkglist, callback=None, callback_total=None):
-        global logger, verboselogger, threadcount, spanmirrors
+        global logger, verboselogger, threadcount, spanmirrors, yb_orig
         global repo_list
 
         def getPackage(po, thread_id):
@@ -168,9 +173,9 @@ class YumRocket(YumBase):
         #  Note that manual testing shows that history is not connected by
         # this point, from the cli with no plugins. So this really does
         # nothing *sigh*.
-        self.history.close()
+        self.conduit._base.history.close()
 
-        self.plugins.run('predownload', pkglist=pkglist)
+        self.conduit._base.plugins.run('predownload', pkglist=pkglist)
         repo_cached = False
         remote_pkgs = []
         remote_size = 0
@@ -257,12 +262,13 @@ class YumRocket(YumBase):
                              'waiting for threads to exit...\n')
             run_event.clear()
             wait_on_threads(threads)
-            raise yum.Errors.YumBaseError, 'Threads terminated'
+            raise PluginYumExit, 'Threads terminated'
 
         if callback_total is not None and not errors:
             callback_total(remote_pkgs, remote_size, beg_download)
 
-        self.plugins.run('postdownload', pkglist=pkglist, errors=errors)
+        self.conduit._base.plugins.run('postdownload', pkglist=pkglist,
+                                       errors=errors)
 
         return errors
 
@@ -272,11 +278,13 @@ def init_hook(conduit):
     Since this is literally replacing an entire function of Yum, there is
     definitely a chance that some other plugins might not work with this.
     """
-    global threadcount, spanmirrors, logger, verbose_logger
+    global threadcount, spanmirrors, logger, verbose_logger, yum_base_orig
     threadcount = conduit.confInt('main', 'threadcount', default=5)
     spanmirrors = conduit.confInt('main', 'spanmirrors', default=3)
     logger = conduit.logger
     verbose_logger = conduit.verbose_logger
     if hasattr(conduit, 'registerPackageName'):
         conduit.registerPackageName('yum-rocket')
-    conduit._base.downloadPkgs = YumRocket().downloadPkgs
+    rocket = YumRocket()
+    rocket.set_conduit(conduit)
+    conduit._base.downloadPkgs = rocket.downloadPkgs

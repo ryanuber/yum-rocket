@@ -8,6 +8,8 @@ enable threading capabilities.
 This YUM plugin works by monkey-patching the yum.YumBase.downloadPackages()
 method.
 
+This is a work in progress. Use at your own risk.
+
 Goals (work in progress)
 ------------------------
 
@@ -28,4 +30,29 @@ The downside to this library is the HTTP request library limitations.
 - `urlgrabber` can do http and ftp and keepalive, but currently has a
   single-operation lock, so not suitable for threading.
 
-This is a work in progress. Use at your own risk.
+Initial Results
+---------------
+
+These are some basic tests I ran using the `downloadonly` YUM plugin with
+`yum-rocket`:
+
+## Downloading Puppet:
+
+```
+2.3 MB/s | 3.7 MB     00:01  <-- With yum-rocket
+534 kB/s | 3.7 MB     00:07  <-- Without yum-rocket
+```
+
+## Downloading gnome-terminal:
+
+```
+1.9 MB/s |  16 MB     00:08  <-- With yum-rocket
+1.2 MB/s |  16 MB     00:13  <-- Without yum-rocket
+```
+
+## Downloading thunderbird:
+
+```
+2.2 MB/s |  47 MB     00:21
+972 kB/s |  47 MB     00:49
+```
