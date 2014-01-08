@@ -23,6 +23,8 @@ class _yb(YumBase):
 
     def downloadPkgs(self, pkglist, callback=None, callback_total=None):
 
+        global logger, verboselogger, threadcount, spanmirrors
+
         def getPackage(po, thread_id):
             if spanmirrors == 1:
                 repo_url = po.repo._urls[random.randint(0,threadcount-1)]
@@ -139,7 +141,10 @@ class _yb(YumBase):
             download_po.append(po)
 
         # Let's thread this bitch
-        self.verbose_logger.info(_("yum-rocket => spawn %d threads" % threadcount))
+        if (len(download_po) > 0):
+            if len(download_po) < threadcount:
+                threadcount = len(download_po)
+            self.verbose_logger.info(_("yum-rocket => spawn %d threads" % threadcount))
         q = Queue.Queue()
         for po in download_po:
             q.put(po)
