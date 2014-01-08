@@ -36,23 +36,23 @@ Initial Results
 These are some basic tests I ran using the `downloadonly` YUM plugin with
 `yum-rocket`:
 
-## Downloading Puppet:
+### Downloading Puppet:
 
 ```
 2.3 MB/s | 3.7 MB     00:01  <-- With yum-rocket
 534 kB/s | 3.7 MB     00:07  <-- Without yum-rocket
 ```
 
-## Downloading gnome-terminal:
+### Downloading gnome-terminal:
 
 ```
 1.9 MB/s |  16 MB     00:08  <-- With yum-rocket
 1.2 MB/s |  16 MB     00:13  <-- Without yum-rocket
 ```
 
-## Downloading thunderbird:
+### Downloading thunderbird:
 
 ```
-2.2 MB/s |  47 MB     00:21
-972 kB/s |  47 MB     00:49
+2.2 MB/s |  47 MB     00:21  <-- With yum-rocket
+972 kB/s |  47 MB     00:49  <-- Without yum-rocket
 ```
