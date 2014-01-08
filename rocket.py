@@ -6,7 +6,6 @@ import time
 import yum.i18n
 _ = yum.i18n._
 P_ = yum.i18n.P_
-import logging
 import urllib
 from urlparse import urlparse
 import Queue
@@ -16,9 +15,6 @@ import random
 
 requires_api_version = '2.5'
 plugin_type = (TYPE_CORE,)
-
-logger = logging.getLogger("yum.Repos")
-verbose_logger = logging.getLogger("yum.verbose.Repos")
 
 spanmirrors = 1
 threadcount = cpu_count()
@@ -163,9 +159,11 @@ class _yb(YumBase):
         return errors
 
 def init_hook(conduit):
-    global threadcount, spanmirrors
+    global threadcount, spanmirrors, logger, verbose_logger
     threadcount = conduit.confInt('main', 'threadcount', default=cpu_count())
     spanmirrors = conduit.confInt('main', 'spanmirrors', default=1)
+    logger = conduit.logger
+    verbose_logger = conduit.verbose_logger
     if hasattr(conduit, 'registerPackageName'):
         conduit.registerPackageName('yum-rocket')
     conduit._base.downloadPkgs = _yb().downloadPkgs
