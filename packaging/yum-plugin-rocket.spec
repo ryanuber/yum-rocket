@@ -29,7 +29,7 @@ A threaded downloader plugin for YUM.
 %files
 %defattr(0644,root,root,0755)
 %{_plugin_dir}/*.py
-%{_conf_dir}/*.conf
+%config %{_conf_dir}/*.conf
 
 %changelog
 * %(date "+%a %b %d %Y") %{name} - %{version}-%{release}
