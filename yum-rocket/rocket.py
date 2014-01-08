@@ -10,14 +10,13 @@ import urllib
 from urlparse import urlparse
 import Queue
 import threading
-from multiprocessing import cpu_count
 import random
 
 requires_api_version = '2.5'
 plugin_type = (TYPE_CORE,)
 
 spanmirrors = 1
-threadcount = cpu_count()
+threadcount = 5
 
 class _yb(YumBase):
 
@@ -37,14 +36,17 @@ class _yb(YumBase):
             verbose_logger.info(_('[%s] %s done: %s' % (thread_id, repo_name, po)))
 
         class PkgDownloadThread(threading.Thread):
-            def __init__(self, q):
+            def __init__(self, q, run_event):
                 threading.Thread.__init__(self)
                 self.q = q
+                self.run_event = run_event
+
             def run(self):
-                while True:
+                while self.run_event.is_set():
                     po = self.q.get()
                     getPackage(po, self.name)
                     self.q.task_done()
+                logger.warn('Stopping %s...' % self.name)
 
         def mediasort(apo, bpo):
             # FIXME: we should probably also use the mediaid; else we
@@ -145,16 +147,32 @@ class _yb(YumBase):
             if len(download_po) < threadcount:
                 threadcount = len(download_po)
             self.verbose_logger.info(_("yum-rocket => spawn %d threads" % threadcount))
+
         q = Queue.Queue()
         for po in download_po:
             q.put(po)
 
-        for i in range(0, threadcount):
-            thread = PkgDownloadThread(q)
-            thread.setDaemon(True)
-            thread.start()
+        run_event = threading.Event()
+        run_event.set()
 
-        q.join()
+        threads = []
+        for i in range(0, threadcount):
+            thread = PkgDownloadThread(q, run_event)
+            thread.start()
+            threads.append(thread)
+
+        def wait_on_threads():
+            while len(threads) > 0:
+                for thread in threads:
+                    if not thread.is_alive():
+                        threads.remove(thread)
+
+        try:
+            wait_on_threads()
+        except:
+            run_event.clear()
+            wait_on_threads()
+            raise yum.Errors.YumBaseError, 'Caught exit signal'
 
         if callback_total is not None and not errors:
             callback_total(remote_pkgs, remote_size, beg_download)
@@ -165,7 +183,7 @@ class _yb(YumBase):
 
 def init_hook(conduit):
     global threadcount, spanmirrors, logger, verbose_logger
-    threadcount = conduit.confInt('main', 'threadcount', default=cpu_count())
+    threadcount = conduit.confInt('main', 'threadcount', default=5)
     spanmirrors = conduit.confInt('main', 'spanmirrors', default=1)
     logger = conduit.logger
     verbose_logger = conduit.verbose_logger
