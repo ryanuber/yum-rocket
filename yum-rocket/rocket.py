@@ -80,7 +80,10 @@ class YumRocket(YumBase):
             fastest mirrors, where N is the number of threads configured.
             """
             if spanmirrors == 1:
-                repo_url = po.repo._urls[random.randint(0,threadcount-1)]
+                repo_range = len(po.repo._urls)
+                if threadcount < repo_range:
+                    repo_range = threadcount
+                repo_url = po.repo._urls[random.randint(0,repo_range-1)]
                 po.repo._urls.remove(repo_url)
                 po.repo._urls = [repo_url] + po.repo._urls
             repo_name = urlparse(po._remote_url()).netloc
