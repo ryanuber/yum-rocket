@@ -25,7 +25,7 @@ The downside to this library is the HTTP request library limitations.
 - `httplib` can do only http and has no keepalive
 - `requests` can do http and keepalive, but can't do ftp (even with
   `requests-ftp` its dodgy at best) and is not part of stdlib.
-- `urllib` can do http and ftp and keepalive, but currently has a
+- `urlgrabber` can do http and ftp and keepalive, but currently has a
   single-operation lock, so not suitable for threading.
 
 This is a work in progress. Use at your own risk.
