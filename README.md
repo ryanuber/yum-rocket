@@ -56,3 +56,23 @@ These are some basic tests I ran using the `downloadonly` YUM plugin with
 2.2 MB/s |  47 MB     00:21  <-- With yum-rocket
 972 kB/s |  47 MB     00:49  <-- Without yum-rocket
 ```
+
+Installing
+----------
+
+Build an RPM for installation:
+
+```
+git clone https://github.com/ryanuber/yum-rocket
+tar czf yum-rocket.tar.gz yum-rocket
+rpmbuild -tb yum-rocket.tar.gz
+rpm -ivh rpmbuild/RPMS/noarch/yum-rocket-*.rpm
+```
+
+Or just put the two files into the right places:
+
+```
+git clone https://github.com/ryanuber/yum-rocket
+cp yum-rocket/yum-rocket/rocket.py /usr/lib/yum-plugins
+cp yum-rocket/yum-rocket/rocket.conf /etc/yum/pluginconf.d
+```

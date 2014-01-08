@@ -1,7 +1,6 @@
 %define realname yum-rocket
 %define _plugin_dir /usr/lib/yum-plugins
 %define _conf_dir /etc/yum/pluginconf.d
-%define _program_dir %(tar -tzf %{SOURCE0} | egrep '^(\./)?%{realname}(-[^/]*)?/$')
 
 name: yum-plugin-rocket
 summary: Fast, threaded downloads for YUM
@@ -17,7 +16,7 @@ requires: yum
 A threaded downloader plugin for YUM.
 
 %prep
-%setup -n %{_program_dir}
+%setup -n %{realname}
 
 %install
 %{__mkdir_p} %{buildroot}/%{_plugin_dir} %{buildroot}/%{_conf_dir}
