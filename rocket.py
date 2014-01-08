@@ -149,7 +149,7 @@ class _yb(YumBase):
         for po in download_po:
             q.put(po)
 
-        for i in range(1, threadcount+1):
+        for i in range(0, threadcount):
             thread = PkgDownloadThread(q)
             thread.setDaemon(True)
             thread.start()
