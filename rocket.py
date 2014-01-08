@@ -43,10 +43,9 @@ class _yb(YumBase):
                 threading.Thread.__init__(self)
                 self.q = q
             def run(self):
-                while True:
-                    po = self.q.get()
-                    getPackage(po, self.name)
-                    self.q.task_done()
+                po = self.q.get()
+                getPackage(po, self.name)
+                self.q.task_done()
 
         def mediasort(apo, bpo):
             # FIXME: we should probably also use the mediaid; else we
@@ -145,12 +144,13 @@ class _yb(YumBase):
         # Let's thread this bitch
         self.verbose_logger.info(_("yum-rocket => spawn %d threads" % threadcount))
         q = Queue.Queue()
-        for i in range(1, threadcount+1):
-            downloader = PkgDownloadThread(q)
-            downloader.start()
-
         for po in download_po:
             q.put(po)
+
+        for i in range(1, threadcount+1):
+            thread = PkgDownloadThread(q)
+            thread.setDaemon(True)
+            thread.start()
 
         q.join()
 
