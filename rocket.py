@@ -43,9 +43,10 @@ class _yb(YumBase):
                 threading.Thread.__init__(self)
                 self.q = q
             def run(self):
-                po = self.q.get()
-                getPackage(po, self.name)
-                self.q.task_done()
+                while True:
+                    po = self.q.get()
+                    getPackage(po, self.name)
+                    self.q.task_done()
 
         def mediasort(apo, bpo):
             # FIXME: we should probably also use the mediaid; else we
