@@ -1,16 +1,40 @@
+#!/usr/bin/python -tt
+#
+# yum-rocket
+# Fast, threaded downloads for YUM
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+# LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+import os
+import time
+import threading
+import random
+import Queue
+import urllib
+from urlparse import urlparse
+
 from yum.plugins import TYPE_CORE
 from yum import YumBase
 import yum.packages
-import os
-import time
 import yum.i18n
 _ = yum.i18n._
-P_ = yum.i18n.P_
-import urllib
-from urlparse import urlparse
-import Queue
-import threading
-import random
 
 requires_api_version = '2.5'
 plugin_type = (TYPE_CORE,)
@@ -18,13 +42,43 @@ plugin_type = (TYPE_CORE,)
 spanmirrors = 1
 threadcount = 5
 
-class _yb(YumBase):
+class YumRocket(YumBase):
+    """ Monkey-patch class for yum.YumBase
 
+    This class simply replaces the `downloadPkgs` method of yum.YumBase. This
+    is required because current versions of YUM use URLGrabber for downloads,
+    which is good for simplicity and progress indication, but limiting for speed
+    and parallel processing.
+
+    This implementation of `downloadPkgs` will use urllib to fetch packages from
+    mirrors, and Python's built-in threading capabilities to make it parallel.
+    This means we are making a sacrifice of progress meters for speed. This may
+    change in time by sending progress data back through the thread queue, but
+    for now all this does is print a message when packages start downloading,
+    and when they finish.
+
+    Parallel downloads pose new questions though - Since we are downloading in
+    multiple threads at the same time, potentially from the same mirror, why not
+    take advantage of the fact that a single repo can have multiple URL's
+    associated with it?
+
+    This is especially useful in combination with the yum-fastestmirror plugin.
+    YumRocket will use the fastest N mirrors for each repository, where N is the
+    number of threads spawned for downloads. This means that even if we only
+    have a single repository, we could potentially download the packages from a
+    slew of different mirrors all in parallel without hitting bandwidth or
+    connection limits enforced by any single mirror. This behaviour can be
+    toggled using the plugin configuration file (on by default).
+    """
     def downloadPkgs(self, pkglist, callback=None, callback_total=None):
-
         global logger, verboselogger, threadcount, spanmirrors
 
         def getPackage(po, thread_id):
+            """ Handle downloading a package from a repository.
+
+            This function will pick a random mirror to download from, of the N
+            fastest mirrors, where N is the number of threads configured.
+            """
             if spanmirrors == 1:
                 repo_url = po.repo._urls[random.randint(0,threadcount-1)]
                 po.repo._urls.remove(repo_url)
@@ -47,6 +101,13 @@ class _yb(YumBase):
                     getPackage(po, self.name)
                     self.q.task_done()
                 logger.warn('Stopping %s...' % self.name)
+
+        def wait_on_threads(threads):
+            """ Wait for a list of threads to finish working. """
+            while len(threads) > 0:
+                for thread in threads:
+                    if not thread.is_alive():
+                        threads.remove(thread)
 
         def mediasort(apo, bpo):
             # FIXME: we should probably also use the mediaid; else we
@@ -142,11 +203,12 @@ class _yb(YumBase):
                 continue
             download_po.append(po)
 
-        # Let's thread this bitch
+        # Let's thread this bitch!
         if (len(download_po) > 0):
             if len(download_po) < threadcount:
                 threadcount = len(download_po)
-            self.verbose_logger.info(_("yum-rocket => spawn %d threads" % threadcount))
+            self.verbose_logger.info(_("Spawning %d download threads" %
+                                       threadcount))
 
         q = Queue.Queue()
         for po in download_po:
@@ -161,18 +223,14 @@ class _yb(YumBase):
             thread.start()
             threads.append(thread)
 
-        def wait_on_threads():
-            while len(threads) > 0:
-                for thread in threads:
-                    if not thread.is_alive():
-                        threads.remove(thread)
-
         try:
-            wait_on_threads()
+            wait_on_threads(threads)
         except:
+            self.logger.warn('\n\nCaught exit signal\nHang tight, '
+                             'waiting for threads to exit...\n')
             run_event.clear()
-            wait_on_threads()
-            raise yum.Errors.YumBaseError, 'Caught exit signal'
+            wait_on_threads(threads)
+            raise yum.Errors.YumBaseError, 'Threads terminated'
 
         if callback_total is not None and not errors:
             callback_total(remote_pkgs, remote_size, beg_download)
@@ -182,6 +240,11 @@ class _yb(YumBase):
         return errors
 
 def init_hook(conduit):
+    """ Install the monkey-patched yum.YumBase class.
+
+    Since this is literally replacing an entire function of Yum, there is
+    definitely a chance that some other plugins might not work with this.
+    """
     global threadcount, spanmirrors, logger, verbose_logger
     threadcount = conduit.confInt('main', 'threadcount', default=5)
     spanmirrors = conduit.confInt('main', 'spanmirrors', default=1)
@@ -189,4 +252,4 @@ def init_hook(conduit):
     verbose_logger = conduit.verbose_logger
     if hasattr(conduit, 'registerPackageName'):
         conduit.registerPackageName('yum-rocket')
-    conduit._base.downloadPkgs = _yb().downloadPkgs
+    conduit._base.downloadPkgs = YumRocket().downloadPkgs
