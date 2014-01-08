@@ -66,7 +66,7 @@ Build an RPM for installation:
 git clone https://github.com/ryanuber/yum-rocket
 tar czf yum-rocket.tar.gz yum-rocket
 rpmbuild -tb yum-rocket.tar.gz
-rpm -ivh rpmbuild/RPMS/noarch/yum-rocket-*.rpm
+rpm -ivh rpmbuild/RPMS/noarch/yum-plugin-rocket-*.rpm
 ```
 
 Or just put the two files into the right places:
