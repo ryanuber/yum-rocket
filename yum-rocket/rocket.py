@@ -39,8 +39,9 @@ _ = yum.i18n._
 requires_api_version = '2.5'
 plugin_type = (TYPE_CORE,)
 
-spanmirrors = 1
+spanmirrors = 3
 threadcount = 5
+repo_list   = dict()
 
 class YumRocket(YumBase):
     """ Monkey-patch class for yum.YumBase
@@ -64,32 +65,54 @@ class YumRocket(YumBase):
 
     This is especially useful in combination with the yum-fastestmirror plugin.
     YumRocket will use the fastest N mirrors for each repository, where N is the
-    number of threads spawned for downloads. This means that even if we only
+    the configured number of mirrors to span. This means that even if we only
     have a single repository, we could potentially download the packages from a
     slew of different mirrors all in parallel without hitting bandwidth or
     connection limits enforced by any single mirror. This behaviour can be
-    toggled using the plugin configuration file (on by default).
+    disabled by setting spanmirrors to 1.
     """
     def downloadPkgs(self, pkglist, callback=None, callback_total=None):
         global logger, verboselogger, threadcount, spanmirrors
+        global repo_list
 
         def getPackage(po, thread_id):
             """ Handle downloading a package from a repository.
 
-            This function will pick a random mirror to download from, of the N
-            fastest mirrors, where N is the number of threads configured.
+            This function will (somewhat) intelligently choose from a number of
+            mirrors to download from. It will choose only the fastest set of
+            mirrors, and keep track of how many threads are already downloading
+            from each of them to help distribute the load over multiple fast
+            mirror servers.
             """
-            if spanmirrors == 1:
-                repo_range = len(po.repo._urls)
-                if threadcount < repo_range:
-                    repo_range = threadcount
-                repo_url = po.repo._urls[random.randint(0,repo_range-1)]
-                po.repo._urls.remove(repo_url)
-                po.repo._urls = [repo_url] + po.repo._urls
+            repo_url = po.repo._urls[0]
+
+            load = 1
+            urlcount = 0
+            for url in po.repo._urls:
+                if not po.repo.id in repo_list.keys():
+                    repo_list[po.repo.id] = dict()
+                if not url in repo_list[po.repo.id].keys():
+                    if spanmirrors < urlcount:
+                        break
+                    repo_list[po.repo.id][url] = 0
+                    urlcount += 1
+
+            for r in repo_list[po.repo.id].keys():
+                if repo_list[po.repo.id][r] < load:
+                    repo_list[po.repo.id][r] += 1
+                    repo_url = r
+                    break
+                load += 1
+
+            po.repo._urls = repo_list[po.repo.id].keys()
+            po.repo._urls.remove(repo_url)
+            po.repo._urls = [repo_url] + po.repo._urls
+
             repo_name = urlparse(po._remote_url()).netloc
             url = po._remote_url()
             verbose_logger.info(_('[%s] %s start: %s' % (thread_id, repo_name, po)))
             urllib.urlretrieve(url, po.localPkg())
+            repo_list[po.repo.id][repo_url] -= 1
             verbose_logger.info(_('[%s] %s done: %s' % (thread_id, repo_name, po)))
 
         class PkgDownloadThread(threading.Thread):
@@ -251,7 +274,7 @@ def init_hook(conduit):
     """
     global threadcount, spanmirrors, logger, verbose_logger
     threadcount = conduit.confInt('main', 'threadcount', default=5)
-    spanmirrors = conduit.confInt('main', 'spanmirrors', default=1)
+    spanmirrors = conduit.confInt('main', 'spanmirrors', default=3)
     logger = conduit.logger
     verbose_logger = conduit.verbose_logger
     if hasattr(conduit, 'registerPackageName'):
