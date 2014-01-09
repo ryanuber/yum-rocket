@@ -31,14 +31,6 @@ each mirror, or a job completes. This will continue until all downloads have
 been completed.
 
 This is highly experimental and not even proven viable at this point.
-The downside to this library is the HTTP request library limitations.
-
-- `urllib` and `urllib2` can do http and ftp, but no (solid) keepalive support
-- `httplib` can do only http and has no keepalive
-- `requests` can do http and keepalive, but can't do ftp (even with
-  `requests-ftp` its dodgy at best) and is not part of stdlib.
-- `urlgrabber` can do http and ftp and keepalive, but currently has a
-  single-operation lock, so not suitable for threading.
 
 Initial Results
 ---------------
