@@ -5,11 +5,6 @@ Fast, parallel downloads for [YUM](http://yum.baseurl.org). It uses good old
 [urllib](http://docs.python.org/library/urllib.html) in place of URLGrabber to
 enable threading capabilities.
 
-This YUM plugin works by monkey-patching the yum.YumBase.downloadPackages()
-method.
-
-This is a work in progress. Use at your own risk.
-
 Goals (work in progress)
 ------------------------
 
@@ -18,9 +13,7 @@ Goals (work in progress)
   distribute HTTP server load and avoid connection/bandwidth limits enforced by
   individual mirror servers
 
-This is highly experimental and not even proven viable at this point. At most,
-the current functionality distributes HTTP load over many mirrors rather than
-repeatedly hammering just one. It might save you a few seconds per transaction.
+This is highly experimental and not even proven viable at this point.
 The downside to this library is the HTTP request library limitations.
 
 - `urllib` and `urllib2` can do http and ftp, but no (solid) keepalive support
@@ -36,7 +29,7 @@ Initial Results
 These are some basic tests I ran using the `downloadonly` YUM plugin with
 `yum-rocket`:
 
-### Downloading Puppet:
+### Downloading puppet:
 
 ```
 2.3 MB/s | 3.7 MB     00:01  <-- With yum-rocket

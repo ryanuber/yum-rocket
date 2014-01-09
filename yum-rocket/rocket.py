@@ -118,14 +118,38 @@ def predownload_hook(conduit):
                 getPackage(po, self.name)
                 self.q.task_done()
             if not self.run_event.is_set():
-                conduit.logger.warn('Stopping %s...' % self.name)
+                conduit.logger.warn('[%s] Stopping...' % self.name)
 
+    def format_number(number):
+        """ Turn numbers into human-readable metric-like numbers
+
+        This function is based on yum-cli/output.py and needed here due to
+        the typical post-download CLI callback not getting called.
+        """
+        symbols = [' ', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y']
+        step = 1024.0
+        thresh = 999
+        depth = 0
+        max_depth = len(symbols) - 1
+        while number > thresh and depth < max_depth:
+            depth  = depth + 1
+            number = number / step
+        if type(number) == type(1) or type(number) == type(1L):
+            format = '%i %s'
+        elif number < 9.95:
+            format = '%.1f %s'
+        else:
+            format = '%.0f %s'
+        return(format % (float(number or 0), symbols[depth]))
+
+    total_size = 0
     download_po = []
     for po in conduit.getDownloadPackages():
         local = po.localPkg()
         if os.path.exists(local):
             conduit.verbose_logger.debug('using local copy of %s' % po)
         else:
+            total_size += po.size
             download_po.append(po)
 
         dirstat = os.statvfs(po.repo.pkgdir)
@@ -165,6 +189,8 @@ def predownload_hook(conduit):
         raise PluginYumExit, 'Threads terminated'
 
     time_delta = time.time() - beg_download
-    total_time = '%02d:%02d' % (time_delta/3600, time_delta)
-    conduit.verbose_logger.info('Downloaded %d packages in %s' %
-                                (len(download_po), total_time))
+    total_time = '%02d:%02d' % (int(time_delta/60), int(time_delta%60))
+
+    conduit.verbose_logger.info('Downloaded %d packages (%s) in %s' %
+                                (len(download_po), format_number(total_size),
+                                total_time))
