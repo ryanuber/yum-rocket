@@ -5,8 +5,8 @@ Fast, parallel downloads for [YUM](http://yum.baseurl.org). It uses good old
 [urllib](http://docs.python.org/library/urllib.html) in place of URLGrabber to
 enable threading capabilities.
 
-Goals (work in progress)
-------------------------
+Goals
+-----
 
 - Minimize download time using threads instead of serial downloads
 - Utilize more than one of the available mirrors for each repository to
