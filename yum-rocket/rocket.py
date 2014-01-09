@@ -92,13 +92,13 @@ def predownload_hook(conduit):
         repo_url = prioritize_po_repos(po)
         repo_host = urlparse(repo_url).netloc
         conduit.verbose_logger.info('[%s] start: %s [%s]' %
-                                      (thread_id, po, repo_host))
+                                    (thread_id, po, repo_host))
         mirror_load(po.repo.id, repo_url, 1)
         url = urljoin(repo_url, po.remote_path)
         urllib.urlretrieve(url, po.localPkg())
         mirror_load(po.repo.id, repo_url, -1)
         conduit.verbose_logger.info('[%s] done: %s' %
-                                      (thread_id, po))
+                                    (thread_id, po))
 
     def wait_on_threads(threads):
         """ Wait for a list of threads to finish working. """
@@ -132,14 +132,14 @@ def predownload_hook(conduit):
         dirstat = os.statvfs(po.repo.pkgdir)
         if (dirstat.f_bavail * dirstat.f_bsize) <= long(po.size):
             raise PluginYumExit, ('Insufficient disk space in directory %s' %
-                                 po.repo.pkgdir)
+                                  po.repo.pkgdir)
 
     # Let's thread this bitch!
     if len(download_po) < threadcount:
         threadcount = len(download_po)
     if (len(download_po) > 0):
         conduit.verbose_logger.info('Spawning %d download threads' %
-                                   threadcount)
+                                    threadcount)
 
     q = Queue.Queue()
     for po in download_po:
@@ -158,7 +158,7 @@ def predownload_hook(conduit):
         wait_on_threads(threads)
     except:
         conduit.logger.warn('\n\nCaught exit signal\nHang tight, '
-                         'waiting for threads to exit...\n')
+                            'waiting for threads to exit...\n')
         run_event.clear()
         wait_on_threads(threads)
         raise PluginYumExit, 'Threads terminated'
