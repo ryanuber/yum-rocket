@@ -28,7 +28,6 @@ import threading
 import Queue
 import urllib
 from urlparse import urlparse, urljoin
-
 from yum.plugins import TYPE_CORE, PluginYumExit
 
 requires_api_version = '2.5'
@@ -148,6 +147,8 @@ def predownload_hook(conduit):
     run_event = threading.Event()
     run_event.set()
 
+    beg_download = time.time()
+
     threads = []
     for i in range(0, threadcount):
         thread = PkgDownloadThread(q, run_event)
@@ -162,3 +163,8 @@ def predownload_hook(conduit):
         run_event.clear()
         wait_on_threads(threads)
         raise PluginYumExit, 'Threads terminated'
+
+    time_delta = time.time() - beg_download
+    total_time = '%02d:%02d' % (time_delta/3600, time_delta)
+    conduit.verbose_logger.info('Downloaded %d packages in %s' %
+                                (len(download_po), total_time))
