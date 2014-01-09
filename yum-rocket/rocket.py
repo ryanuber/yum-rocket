@@ -25,17 +25,11 @@
 import os
 import time
 import threading
-import random
 import Queue
 import urllib
 from urlparse import urlparse, urljoin
 
-from yum.plugins import TYPE_CORE
-from yum import YumBase
-from yum.plugins import PluginYumExit
-import yum.packages
-import yum.i18n
-_ = yum.i18n._
+from yum.plugins import TYPE_CORE, PluginYumExit
 
 requires_api_version = '2.5'
 plugin_type = (TYPE_CORE,)
@@ -97,14 +91,14 @@ def predownload_hook(conduit):
         """ Handle downloading a package from a repository. """
         repo_url = prioritize_po_repos(po)
         repo_host = urlparse(repo_url).netloc
-        conduit.verbose_logger.info(_('[%s] start: %s [%s]' %
-                                      (thread_id, po, repo_host)))
+        conduit.verbose_logger.info('[%s] start: %s [%s]' %
+                                      (thread_id, po, repo_host))
         mirror_load(po.repo.id, repo_url, 1)
         url = urljoin(repo_url, po.remote_path)
         urllib.urlretrieve(url, po.localPkg())
         mirror_load(po.repo.id, repo_url, -1)
-        conduit.verbose_logger.info(_('[%s] done: %s' %
-                                      (thread_id, po)))
+        conduit.verbose_logger.info('[%s] done: %s' %
+                                      (thread_id, po))
 
     def wait_on_threads(threads):
         """ Wait for a list of threads to finish working. """
@@ -131,21 +125,21 @@ def predownload_hook(conduit):
     for po in conduit.getDownloadPackages():
         local = po.localPkg()
         if os.path.exists(local):
-            conduit.verbose_logger.debug(_('using local copy of %s' % po))
+            conduit.verbose_logger.debug('using local copy of %s' % po)
         else:
             download_po.append(po)
 
         dirstat = os.statvfs(po.repo.pkgdir)
         if (dirstat.f_bavail * dirstat.f_bsize) <= long(po.size):
-            raise PluginYumExit, _('Insufficient disk space in directory %s' %
+            raise PluginYumExit, ('Insufficient disk space in directory %s' %
                                  po.repo.pkgdir)
 
     # Let's thread this bitch!
     if len(download_po) < threadcount:
         threadcount = len(download_po)
     if (len(download_po) > 0):
-        conduit.verbose_logger.info(_("Spawning %d download threads" %
-                                   threadcount))
+        conduit.verbose_logger.info('Spawning %d download threads' %
+                                   threadcount)
 
     q = Queue.Queue()
     for po in download_po:
