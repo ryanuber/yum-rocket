@@ -191,6 +191,7 @@ def predownload_hook(conduit):
     time_delta = time.time() - beg_download
     total_time = '%02d:%02d' % (int(time_delta/60), int(time_delta%60))
 
-    conduit.verbose_logger.info('Downloaded %d packages (%s) in %s' %
-                                (len(download_po), format_number(total_size),
-                                total_time))
+    speed = total_size / time_delta
+    conduit.verbose_logger.info('Downloaded %sB in %s (%sB/s)' %
+                                (format_number(total_size), total_time,
+                                format_number(speed).strip()))
