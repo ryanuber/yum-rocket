@@ -34,18 +34,18 @@ requires_api_version = '2.5'
 plugin_type = (TYPE_CORE,)
 
 spanmirrors = 3
-threadcount = 5
+maxthreads = 5
 repo_list   = dict()
 
 def init_hook(conduit):
-    global threadcount, spanmirrors
-    threadcount = conduit.confInt('main', 'threadcount', default=5)
+    global maxthreads, spanmirrors
+    maxthreads = conduit.confInt('main', 'maxthreads', default=5)
     spanmirrors = conduit.confInt('main', 'spanmirrors', default=3)
     if hasattr(conduit, 'registerPackageName'):
         conduit.registerPackageName('yum-rocket')
 
 def predownload_hook(conduit):
-    global threadcount, spanmirrors, repo_list
+    global maxthreads, spanmirrors, repo_list
 
     def prioritize_po_repos(po):
         """ Organize a repository list based on mirror speed.
@@ -158,11 +158,11 @@ def predownload_hook(conduit):
                                   po.repo.pkgdir)
 
     # Let's thread this bitch!
-    if len(download_po) < threadcount:
-        threadcount = len(download_po)
+    if len(download_po) < maxthreads:
+        maxthreads = len(download_po)
     if (len(download_po) > 0):
         conduit.verbose_logger.info('Spawning %d download threads' %
-                                    threadcount)
+                                    maxthreads)
 
     q = Queue.Queue()
     for po in download_po:
@@ -174,7 +174,7 @@ def predownload_hook(conduit):
     beg_download = time.time()
 
     threads = []
-    for i in range(0, threadcount):
+    for i in range(0, maxthreads):
         thread = PkgDownloadThread(q, run_event)
         thread.start()
         threads.append(thread)
