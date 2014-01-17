@@ -34,15 +34,32 @@ requires_api_version = '2.5'
 plugin_type = (TYPE_CORE,)
 
 spanmirrors = 3
-maxthreads = 5
+maxthreads  = 5
 repo_list   = dict()
 
 def init_hook(conduit):
+    if hasattr(conduit, 'registerPackageName'):
+        conduit.registerPackageName('yum-rocket')
+
+def config_hook(conduit):
     global maxthreads, spanmirrors
     maxthreads = conduit.confInt('main', 'maxthreads', default=5)
     spanmirrors = conduit.confInt('main', 'spanmirrors', default=3)
-    if hasattr(conduit, 'registerPackageName'):
-        conduit.registerPackageName('yum-rocket')
+    parser = conduit.getOptParser()
+    if hasattr(parser, 'plugin_option_group'):
+        parser = parser.plugin_option_group
+    parser.add_option('', '--maxthreads', dest='maxthreads', type='int',
+                      action='store', help='Maximum downloader threads')
+    parser.add_option('', '--spanmirrors', dest='spanmirrors', type='int',
+                      action='store', help='Mirrors to span per repository')
+
+def postreposetup_hook(conduit):
+    global maxthreads, spanmirrors
+    opts, _ = conduit.getCmdLine()
+    if opts.maxthreads:
+        maxthreads = opts.maxthreads
+    if opts.spanmirrors:
+        spanmirrors = opts.spanmirrors
 
 def predownload_hook(conduit):
     global maxthreads, spanmirrors, repo_list

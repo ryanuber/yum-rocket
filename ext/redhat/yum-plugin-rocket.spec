@@ -4,7 +4,7 @@
 
 name: yum-plugin-rocket
 summary: Fast, threaded downloads for YUM
-version: 0.2
+version: 0.2.1
 release: 1%{?dist}
 buildarch: noarch
 license: MIT
