@@ -36,7 +36,7 @@ Initial Results
 ---------------
 
 These are some basic tests I ran using the `downloadonly` YUM plugin with
-`yum-rocket`:
+`yum-rocket` using the default settings (5 threads spanning 3 mirrors):
 
 ### Downloading puppet:
 
@@ -58,6 +58,18 @@ These are some basic tests I ran using the `downloadonly` YUM plugin with
 2.2 MB/s |  47 MB     00:21  <-- With yum-rocket
 972 kB/s |  47 MB     00:49  <-- Without yum-rocket
 ```
+
+### Downloading the Haskell compiler (GHC):
+
+```
+2.0MB/s  |  69 MB     00:33  <-- With yum-rocket
+1.7 MB/s |  69 MB     00:40  <-- Without yum-rocket
+```
+
+As you can see, there is a good deal of variation in the results. The difference
+that threaded downloads can make depends on many things, including the selected
+mirrors, whether yum-fastestmirror is enabled or not, and even the individual
+transaction being performed.
 
 Installing
 ----------
