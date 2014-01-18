@@ -168,9 +168,10 @@ def postreposetup_hook(conduit):
         wait_on_threads(threads)
         raise PluginYumExit, 'Threads terminated'
 
-    time_delta = time.time() - beg_download
-    total_time = '%02d:%02d' % (int(time_delta/60), int(time_delta%60))
-    conduit.verbose_logger.info('Downloaded metadata in %s' % total_time)
+    if (parallel > 0):
+        time_delta = time.time() - beg_download
+        total_time = '%02d:%02d' % (int(time_delta/60), int(time_delta%60))
+        conduit.verbose_logger.info('Downloaded metadata in %s' % total_time)
 
 def predownload_hook(conduit):
     global maxthreads, spanmirrors, repo_list
