@@ -120,15 +120,20 @@ def postreposetup_hook(conduit):
         repo = conduit.getRepos().getRepo(reponame)
         if not repo.isEnabled():
             continue
-        md_url = urljoin(repo.urls[0], 'repodata/repomd.xml')
         fname = os.path.join(cachedir, repo.id, 'repomd.xml')
         if not os.path.exists(fname):
+            # Just use urls[0] because we are only downloading one file
+            md_url = urljoin(repo.urls[0], 'repodata/repomd.xml')
             urllib.urlretrieve(md_url, fname)
         mdo = RepoMD(repo.id, fname)
         for ft in ['primary', 'primary_db']:
             location = mdo.repoData[ft].location[1]
             fname = os.path.basename(location)
+
+            # Acceptable to use urls[0] here because we are downloading at most
+            # two files from each source
             url = urljoin(repo.urls[0], location)
+
             dest = os.path.join(cachedir, repo.id, fname)
             if not os.path.exists(dest):
                 md_downloads.append((repo.id, url, dest, ft))
@@ -162,6 +167,10 @@ def postreposetup_hook(conduit):
         run_event.clear()
         wait_on_threads(threads)
         raise PluginYumExit, 'Threads terminated'
+
+    time_delta = time.time() - beg_download
+    total_time = '%02d:%02d' % (int(time_delta/60), int(time_delta%60))
+    conduit.verbose_logger.info('Downloaded metadata in %s' % total_time)
 
 def predownload_hook(conduit):
     global maxthreads, spanmirrors, repo_list
