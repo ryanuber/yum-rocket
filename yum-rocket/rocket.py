@@ -42,9 +42,19 @@ repo_list   = dict()
 def wait_on_threads(threads):
     """ Wait for a list of threads to finish working. """
     while len(threads) > 0:
+        time.sleep(0.1)
         for thread in threads:
             if not thread.is_alive():
                 threads.remove(thread)
+
+def wait_on_queue(q):
+    """ Wait for all tasks in a queue to complete.
+
+    This allows us to wait on the queue while still capturing exceptions,
+    including KeyboardInterrupt, and signaling early termination if needed.
+    """
+    while q.unfinished_tasks:
+        time.sleep(0.1)
 
 def format_number(number):
     """ Turn numbers into human-readable metric-like numbers
@@ -120,27 +130,27 @@ def postreposetup_hook(conduit):
         repo = conduit.getRepos().getRepo(reponame)
         if not repo.isEnabled():
             continue
+
         fname = os.path.join(cachedir, repo.id, 'repomd.xml')
+
         if not os.path.exists(fname):
             # Just use urls[0] because we are only downloading one file
             md_url = urljoin(repo.urls[0], 'repodata/repomd.xml')
             urllib.urlretrieve(md_url, fname)
+
         mdo = RepoMD(repo.id, fname)
-        for ft in ['primary', 'primary_db']:
+
+        for ft in ['primary_db']:
             location = mdo.repoData[ft].location[1]
             fname = os.path.basename(location)
-
-            # Acceptable to use urls[0] here because we are downloading at most
-            # two files from each source
             url = urljoin(repo.urls[0], location)
-
             dest = os.path.join(cachedir, repo.id, fname)
             if not os.path.exists(dest):
                 md_downloads.append((repo.id, url, dest, ft))
 
     # Threaded metadata download
     parallel = min(len(md_downloads), maxthreads)
-    if (parallel > 0):
+    if parallel > 0:
         conduit.verbose_logger.info('Spawning %d metadata download threads' %
                                     parallel)
 
@@ -160,7 +170,7 @@ def postreposetup_hook(conduit):
         threads.append(thread)
 
     try:
-        wait_on_threads(threads)
+        wait_on_queue(q)
     except:
         conduit.logger.warn('\n\nCaught exit signal\nHang tight, '
                             'waiting for threads to exit...\n')
@@ -279,7 +289,7 @@ def predownload_hook(conduit):
         threads.append(thread)
 
     try:
-        wait_on_threads(threads)
+        wait_on_queue(q)
     except:
         conduit.logger.warn('\n\nCaught exit signal\nHang tight, '
                             'waiting for threads to exit...\n')
@@ -287,10 +297,11 @@ def predownload_hook(conduit):
         wait_on_threads(threads)
         raise PluginYumExit, 'Threads terminated'
 
-    time_delta = time.time() - beg_download
-    total_time = '%02d:%02d' % (int(time_delta/60), int(time_delta%60))
+    if parallel > 0:
+        time_delta = time.time() - beg_download
+        total_time = '%02d:%02d' % (int(time_delta/60), int(time_delta%60))
 
-    speed = total_size / time_delta
-    conduit.verbose_logger.info('Downloaded %sB in %s (%sB/s)' %
-                                (format_number(total_size), total_time,
+        speed = total_size / time_delta
+        conduit.verbose_logger.info('Downloaded %sB in %s (%sB/s)' %
+                                    (format_number(total_size), total_time,
                                 format_number(speed).strip()))
