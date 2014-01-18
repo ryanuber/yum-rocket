@@ -29,6 +29,7 @@ import Queue
 import urllib
 from urlparse import urlparse, urljoin
 from yum.plugins import TYPE_CORE, PluginYumExit
+import tempfile
 
 requires_api_version = '2.5'
 plugin_type = (TYPE_CORE,)
@@ -36,6 +37,35 @@ plugin_type = (TYPE_CORE,)
 spanmirrors = 3
 maxthreads  = 5
 repo_list   = dict()
+
+def wait_on_threads(threads):
+    """ Wait for a list of threads to finish working. """
+    while len(threads) > 0:
+        for thread in threads:
+            if not thread.is_alive():
+                threads.remove(thread)
+
+def format_number(number):
+    """ Turn numbers into human-readable metric-like numbers
+
+    This function is based on yum-cli/output.py and needed here due to
+    the typical post-download CLI callback not getting called.
+    """
+    symbols = [' ', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y']
+    step = 1024.0
+    thresh = 999
+    depth = 0
+    max_depth = len(symbols) - 1
+    while number > thresh and depth < max_depth:
+        depth  = depth + 1
+        number = number / step
+    if type(number) == type(1) or type(number) == type(1L):
+        format = '%i %s'
+    elif number < 9.95:
+        format = '%.1f %s'
+    else:
+        format = '%.0f %s'
+    return(format % (float(number or 0), symbols[depth]))
 
 def init_hook(conduit):
     if hasattr(conduit, 'registerPackageName'):
@@ -60,6 +90,69 @@ def postreposetup_hook(conduit):
         maxthreads = opts.maxthreads
     if opts.spanmirrors:
         spanmirrors = opts.spanmirrors
+
+    def getMD(url, thread_id):
+        repo_host = urlparse(url).netloc
+        remote_path = urlparse(url).path
+        conduit.verbose_logger.info('[%s] start: %s [%s]' %
+                                    (thread_id, remote_path, repo_host))
+        urllib.urlretrieve(url, '/dev/null')
+        conduit.verbose_logger.info('[%s] done: %s [%s]' %
+                                    (thread_id, remote_path, repo_host))
+
+    class MDDownloadThread(threading.Thread):
+        def __init__(self, q, run_event):
+            threading.Thread.__init__(self)
+            self.q = q
+            self.run_event = run_event
+
+        def run(self):
+            while self.run_event.is_set() and not self.q.empty():
+                url = self.q.get()
+                getMD(url, self.name)
+                self.q.task_done()
+            if not self.run_event.is_set():
+                conduit.logger.warn('[%s] Stopping...' % self.name)
+
+    # Threaded metadata download
+    q = Queue.Queue()
+    cachedir = conduit._base.conf.cachedir
+
+    for reponame in conduit.getRepos().repos:
+        repo = conduit.getRepos().getRepo(reponame)
+        if not repo.enabled:
+            continue
+        md_url = urljoin(repo.urls[0], 'repodata/repomd.xml')
+        temp = tempfile.NamedTemporaryFile()
+        urllib.urlretrieve(md_url, temp.name)
+        from yum.repoMDObject import RepoData
+        rd = RepoData()
+        rd.parse(temp.read())
+        #print repo.repoXML.repoData.get('repomd')
+        #for ft in repo.repoXML.fileTypes():
+        #    location = repo.repoXML.repoData[ft].location[1]
+        #    url = urljoin(repo.urls[0], location)
+        #    q.put(url)
+
+    run_event = threading.Event()
+    run_event.set()
+
+    beg_download = time.time()
+
+    threads = []
+    for i in range(0, maxthreads):
+        thread = MDDownloadThread(q, run_event)
+        thread.start()
+        threads.append(thread)
+
+    try:
+        wait_on_threads(threads)
+    except:
+        conduit.logger.warn('\n\nCaught exit signal\nHang tight, '
+                            'waiting for threads to exit...\n')
+        run_event.clear()
+        wait_on_threads(threads)
+        raise PluginYumExit, 'Threads terminated'
 
 def predownload_hook(conduit):
     global maxthreads, spanmirrors, repo_list
@@ -116,13 +209,6 @@ def predownload_hook(conduit):
         conduit.verbose_logger.info('[%s] done: %s' %
                                     (thread_id, po))
 
-    def wait_on_threads(threads):
-        """ Wait for a list of threads to finish working. """
-        while len(threads) > 0:
-            for thread in threads:
-                if not thread.is_alive():
-                    threads.remove(thread)
-
     class PkgDownloadThread(threading.Thread):
         def __init__(self, q, run_event):
             threading.Thread.__init__(self)
@@ -136,28 +222,6 @@ def predownload_hook(conduit):
                 self.q.task_done()
             if not self.run_event.is_set():
                 conduit.logger.warn('[%s] Stopping...' % self.name)
-
-    def format_number(number):
-        """ Turn numbers into human-readable metric-like numbers
-
-        This function is based on yum-cli/output.py and needed here due to
-        the typical post-download CLI callback not getting called.
-        """
-        symbols = [' ', 'k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y']
-        step = 1024.0
-        thresh = 999
-        depth = 0
-        max_depth = len(symbols) - 1
-        while number > thresh and depth < max_depth:
-            depth  = depth + 1
-            number = number / step
-        if type(number) == type(1) or type(number) == type(1L):
-            format = '%i %s'
-        elif number < 9.95:
-            format = '%.1f %s'
-        else:
-            format = '%.0f %s'
-        return(format % (float(number or 0), symbols[depth]))
 
     total_size = 0
     download_po = []
