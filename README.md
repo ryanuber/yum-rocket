@@ -41,35 +41,46 @@ These are some basic tests I ran using the `downloadonly` YUM plugin with
 ### Downloading puppet:
 
 ```
-2.3 MB/s | 3.7 MB     00:01  <-- With yum-rocket
-534 kB/s | 3.7 MB     00:07  <-- Without yum-rocket
+3.7 MB     00:01  <-- With yum-rocket
+3.7 MB     00:07  <-- Without yum-rocket
 ```
 
 ### Downloading gnome-terminal:
 
 ```
-1.9 MB/s |  16 MB     00:08  <-- With yum-rocket
-1.2 MB/s |  16 MB     00:13  <-- Without yum-rocket
+16 MB     00:08  <-- With yum-rocket
+16 MB     00:13  <-- Without yum-rocket
 ```
 
 ### Downloading thunderbird:
 
 ```
-2.2 MB/s |  47 MB     00:21  <-- With yum-rocket
-972 kB/s |  47 MB     00:49  <-- Without yum-rocket
+47 MB     00:21  <-- With yum-rocket
+47 MB     00:49  <-- Without yum-rocket
 ```
 
 ### Downloading the Haskell compiler (GHC):
 
 ```
-2.0MB/s  |  69 MB     00:33  <-- With yum-rocket
-1.7 MB/s |  69 MB     00:40  <-- Without yum-rocket
+69 MB     00:33  <-- With yum-rocket
+69 MB     00:40  <-- Without yum-rocket
 ```
 
 As you can see, there is a good deal of variation in the results. The difference
 that threaded downloads can make depends on many things, including the selected
 mirrors, whether yum-fastestmirror is enabled or not, and even the individual
 transaction being performed.
+
+Limitations
+-----------
+
+Occasionally `yum-rocket` will download the `repomd.xml` file for a repository
+with metalinks enabled, and the downloaded copy won't end up matching the one
+that would be downloaded via the metalink. A warning will be thrown by YUM and
+the metadata file will be re-downloaded.
+
+Since `yum-rocket` uses `urllib`, keepalive's are not implemented. This can
+result in a performance penalty in re-establishing connections.
 
 Installing
 ----------
