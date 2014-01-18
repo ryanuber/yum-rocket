@@ -30,7 +30,6 @@ import urllib
 from urlparse import urlparse, urljoin
 from yum.plugins import TYPE_CORE, PluginYumExit
 from yum.repoMDObject import RepoMD
-import tempfile
 
 requires_api_version = '2.5'
 plugin_type = (TYPE_CORE,)
