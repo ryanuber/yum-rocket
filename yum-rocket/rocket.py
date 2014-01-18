@@ -87,19 +87,19 @@ def config_hook(conduit):
 def postreposetup_hook(conduit):
     global maxthreads, spanmirrors
     opts, _ = conduit.getCmdLine()
+    cachedir = conduit._base.conf.cachedir
+
     if opts.maxthreads:
         maxthreads = opts.maxthreads
     if opts.spanmirrors:
         spanmirrors = opts.spanmirrors
 
-    def getMD(url, dest, thread_id):
-        repo_host = urlparse(url).netloc
-        remote_path = urlparse(url).path
-        conduit.verbose_logger.info('[%s] start: %s [%s]' %
-                                    (thread_id, remote_path, repo_host))
+    def getMD(repoid, url, dest, ft, thread_id):
+        conduit.verbose_logger.info('[%s] start: %s/%s' %
+                                    (thread_id, repoid, ft))
         urllib.urlretrieve(url, dest)
-        conduit.verbose_logger.info('[%s] done: %s [%s]' %
-                                    (thread_id, remote_path, repo_host))
+        conduit.verbose_logger.info('[%s] done: %s/%s' %
+                                    (thread_id, repoid, ft))
 
     class MDDownloadThread(threading.Thread):
         def __init__(self, q, run_event):
@@ -109,16 +109,13 @@ def postreposetup_hook(conduit):
 
         def run(self):
             while self.run_event.is_set() and not self.q.empty():
-                (url, dest) = self.q.get()
-                getMD(url, dest, self.name)
+                (repoid, url, dest, ft) = self.q.get()
+                getMD(repoid, url, dest, ft, self.name)
                 self.q.task_done()
             if not self.run_event.is_set():
                 conduit.logger.warn('[%s] Stopping...' % self.name)
 
-    # Threaded metadata download
-    q = Queue.Queue()
-    cachedir = conduit._base.conf.cachedir
-
+    md_downloads = []
     for reponame in conduit.getRepos().repos:
         repo = conduit.getRepos().getRepo(reponame)
         if not repo.isEnabled():
@@ -128,12 +125,23 @@ def postreposetup_hook(conduit):
         if not os.path.exists(fname):
             urllib.urlretrieve(md_url, fname)
         mdo = RepoMD(repo.id, fname)
-        for ft in mdo.fileTypes():
+        for ft in ['primary', 'primary_db']:
             location = mdo.repoData[ft].location[1]
             fname = os.path.basename(location)
             url = urljoin(repo.urls[0], location)
             dest = os.path.join(cachedir, repo.id, fname)
-            q.put((url, dest))
+            if not os.path.exists(dest):
+                md_downloads.append((repo.id, url, dest, ft))
+
+    # Threaded metadata download
+    parallel = min(len(md_downloads), maxthreads)
+    if (parallel > 0):
+        conduit.verbose_logger.info('Spawning %d metadata download threads' %
+                                    parallel)
+
+    q = Queue.Queue()
+    for download in md_downloads:
+        q.put(download)
 
     run_event = threading.Event()
     run_event.set()
@@ -141,7 +149,7 @@ def postreposetup_hook(conduit):
     beg_download = time.time()
 
     threads = []
-    for i in range(0, maxthreads):
+    for i in range(0, parallel):
         thread = MDDownloadThread(q, run_event)
         thread.start()
         threads.append(thread)
@@ -239,12 +247,11 @@ def predownload_hook(conduit):
             raise PluginYumExit, ('Insufficient disk space in directory %s' %
                                   po.repo.pkgdir)
 
-    # Let's thread this bitch!
-    if len(download_po) < maxthreads:
-        maxthreads = len(download_po)
-    if (len(download_po) > 0):
-        conduit.verbose_logger.info('Spawning %d download threads' %
-                                    maxthreads)
+    # Threaded package downloads
+    parallel = min(len(download_po), maxthreads)
+    if (parallel > 0):
+        conduit.verbose_logger.info('Spawning %d package download threads' %
+                                    parallel)
 
     q = Queue.Queue()
     for po in download_po:
@@ -256,7 +263,7 @@ def predownload_hook(conduit):
     beg_download = time.time()
 
     threads = []
-    for i in range(0, maxthreads):
+    for i in range(0, parallel):
         thread = PkgDownloadThread(q, run_event)
         thread.start()
         threads.append(thread)
