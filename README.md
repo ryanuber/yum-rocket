@@ -9,6 +9,7 @@ Goals
 -----
 
 - Minimize download time using threads instead of serial downloads
+- Thread both package and metadata downloads
 - Utilize more than one of the available mirrors for each repository to
   distribute HTTP server load and avoid connection/bandwidth limits enforced by
   individual mirror servers
