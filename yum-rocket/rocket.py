@@ -29,6 +29,7 @@ import Queue
 import urllib
 from urlparse import urlparse, urljoin
 from yum.plugins import TYPE_CORE, PluginYumExit
+from yum.repoMDObject import RepoMD
 import tempfile
 
 requires_api_version = '2.5'
@@ -91,12 +92,12 @@ def postreposetup_hook(conduit):
     if opts.spanmirrors:
         spanmirrors = opts.spanmirrors
 
-    def getMD(url, thread_id):
+    def getMD(url, dest, thread_id):
         repo_host = urlparse(url).netloc
         remote_path = urlparse(url).path
         conduit.verbose_logger.info('[%s] start: %s [%s]' %
                                     (thread_id, remote_path, repo_host))
-        urllib.urlretrieve(url, '/dev/null')
+        urllib.urlretrieve(url, dest)
         conduit.verbose_logger.info('[%s] done: %s [%s]' %
                                     (thread_id, remote_path, repo_host))
 
@@ -108,8 +109,8 @@ def postreposetup_hook(conduit):
 
         def run(self):
             while self.run_event.is_set() and not self.q.empty():
-                url = self.q.get()
-                getMD(url, self.name)
+                (url, dest) = self.q.get()
+                getMD(url, dest, self.name)
                 self.q.task_done()
             if not self.run_event.is_set():
                 conduit.logger.warn('[%s] Stopping...' % self.name)
@@ -117,20 +118,22 @@ def postreposetup_hook(conduit):
     # Threaded metadata download
     q = Queue.Queue()
     cachedir = conduit._base.conf.cachedir
-    print cachedir
 
     for reponame in conduit.getRepos().repos:
         repo = conduit.getRepos().getRepo(reponame)
-        if not repo.enabled:
+        if not repo.isEnabled():
             continue
         md_url = urljoin(repo.urls[0], 'repodata/repomd.xml')
         fname = os.path.join(cachedir, repo.id, 'repomd.xml')
-        urllib.urlretrieve(md_url, fname)
-        for ft in repo.repoXML.fileTypes():
-            location = repo.repoXML.repoData[ft].location[1]
+        if not os.path.exists(fname):
+            urllib.urlretrieve(md_url, fname)
+        mdo = RepoMD(repo.id, fname)
+        for ft in mdo.fileTypes():
+            location = mdo.repoData[ft].location[1]
+            fname = os.path.basename(location)
             url = urljoin(repo.urls[0], location)
-            print url
-            q.put(url)
+            dest = os.path.join(cachedir, repo.id, fname)
+            q.put((url, dest))
 
     run_event = threading.Event()
     run_event.set()
