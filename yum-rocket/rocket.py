@@ -117,22 +117,20 @@ def postreposetup_hook(conduit):
     # Threaded metadata download
     q = Queue.Queue()
     cachedir = conduit._base.conf.cachedir
+    print cachedir
 
     for reponame in conduit.getRepos().repos:
         repo = conduit.getRepos().getRepo(reponame)
         if not repo.enabled:
             continue
         md_url = urljoin(repo.urls[0], 'repodata/repomd.xml')
-        temp = tempfile.NamedTemporaryFile()
-        urllib.urlretrieve(md_url, temp.name)
-        from yum.repoMDObject import RepoData
-        rd = RepoData()
-        rd.parse(temp.read())
-        #print repo.repoXML.repoData.get('repomd')
-        #for ft in repo.repoXML.fileTypes():
-        #    location = repo.repoXML.repoData[ft].location[1]
-        #    url = urljoin(repo.urls[0], location)
-        #    q.put(url)
+        fname = os.path.join(cachedir, repo.id, 'repomd.xml')
+        urllib.urlretrieve(md_url, fname)
+        for ft in repo.repoXML.fileTypes():
+            location = repo.repoXML.repoData[ft].location[1]
+            url = urljoin(repo.urls[0], location)
+            print url
+            q.put(url)
 
     run_event = threading.Event()
     run_event.set()
