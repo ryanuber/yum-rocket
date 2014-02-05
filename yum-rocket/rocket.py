@@ -1,26 +1,4 @@
 #!/usr/bin/python -tt
-#
-# yum-rocket
-# Fast, threaded downloads for YUM
-#
-# Permission is hereby granted, free of charge, to any person obtaining
-# a copy of this software and associated documentation files (the
-# "Software"), to deal in the Software without restriction, including
-# without limitation the rights to use, copy, modify, merge, publish,
-# distribute, sublicense, and/or sell copies of the Software, and to
-# permit persons to whom the Software is furnished to do so, subject to
-# the following conditions:
-#
-# The above copyright notice and this permission notice shall be
-# included in all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-# LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import os
 import time
@@ -103,12 +81,10 @@ def postreposetup_hook(conduit):
     if opts.spanmirrors:
         spanmirrors = opts.spanmirrors
 
-    def getMD(repoid, url, dest, ft, thread_id):
-        conduit.verbose_logger.info('[%s] start: %s/%s' %
-                                    (thread_id, repoid, ft))
+    def getMD(dl_name, url, dest, thread_id):
+        conduit.verbose_logger.info('[%s] start: %s' % (thread_id, dl_name))
         urllib.urlretrieve(url, dest)
-        conduit.verbose_logger.info('[%s] done: %s/%s' %
-                                    (thread_id, repoid, ft))
+        conduit.verbose_logger.info('[%s] done: %s' % (thread_id, dl_name))
 
     class MDDownloadThread(threading.Thread):
         def __init__(self, q, run_event):
@@ -119,7 +95,7 @@ def postreposetup_hook(conduit):
         def run(self):
             while self.run_event.is_set() and not self.q.empty():
                 (repoid, url, dest, ft) = self.q.get()
-                getMD(repoid, url, dest, ft, self.name)
+                getMD(dl_name, url, dest, self.name)
                 self.q.task_done()
             if not self.run_event.is_set():
                 conduit.logger.warn('[%s] Stopping...' % self.name)
@@ -145,7 +121,7 @@ def postreposetup_hook(conduit):
             url = urljoin(repo.urls[0], location)
             dest = os.path.join(cachedir, repo.id, fname)
             if not os.path.exists(dest):
-                md_downloads.append((repo.id, url, dest, ft))
+                md_downloads.append(('%s/%s' % (repo.id, ft), url, dest))
 
     # Threaded metadata download
     parallel = min(len(md_downloads), maxthreads)
